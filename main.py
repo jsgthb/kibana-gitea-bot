@@ -1,6 +1,7 @@
 import logging
 import yaml
 import urllib3
+import requests
 from typing import Dict, Any
 
 CONFIG_PATH = "config.yml"
@@ -33,6 +34,39 @@ class KibanaClient:
             logging.warning(f"SSL verification disabled for Kibana requests (verify_ssl = False)")
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+    def test_connection(self) -> bool:
+        """Test Kibana Cases connection by fetching a random case"""
+        # TODO better test for checking case update permissions
+        try:
+            # Non existent case ID to check Kibana case permissions
+            test_case_id = "00000000-0000-0000-0000-000000000000"
+            response = requests.get(
+                f"{self.base_url}/api/cases/{test_case_id}",
+                headers = self.headers,
+                verify = self.ssl_verification
+            )
+            response.raise_for_status()
+            # Code shouldn't be reached as case most likely doesn't exist
+            logging.info("Successfully connected to Kibana Security!")
+            return True
+        except requests.exceptions.HTTPError as error:
+            # 404 means request is authenticated and has permission to retireve cases
+            if error.response.status_code == 404:
+                logging.info("Successfully connected to Kibana Security!")
+                return True
+            # Specific failures
+            elif error.response.status_code == 401:
+                logging.error("Kibana authentication failed: Unauthorized (401). Check API key")
+            elif error.response.status_code == 403:
+                logging.error("Kibana authentication failed: Forbidden (403). API key is valid but lacks permissions for security cases")
+            else:
+                logging.error(f"Kibana connection failed with an HTTP error: {error}")
+            return False
+        except requests.exceptions.RequestException as error:
+            # Other errors such as connection timeouts or DNS errors
+            logging.error(f"Kibana connection failure: {error}")
+            return False
+        
 if __name__ == "__main__":
     try:
         config = load_config()
@@ -42,11 +76,12 @@ if __name__ == "__main__":
         )
         logging.info("Config successfully loaded!")
 
-        client = KibanaClient(
+        kibana_client = KibanaClient(
             base_url = config["kibana"]["url"],
             api_key = config["kibana"]["api_key"],
             ssl_verification = config["kibana"]["verify_ssl"],
         )
+        kibana_connected = kibana_client.test_connection()
 
     except Exception as error:
         logging.critical(f"Failed to execute script: {error}", exc_info=True)
