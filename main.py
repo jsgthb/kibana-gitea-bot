@@ -67,6 +67,18 @@ class KibanaClient:
             logging.error(f"Kibana connection failure: {error}")
             return False
         
+class GiteaClient:
+    """Responsible for all interactions with the Gitea API"""
+    def __init__(self, base_url: str, api_key: str, org_name: str, repo_name: str):
+        self.base_url = base_url.rstrip("/")
+        self.org_name = org_name
+        self.repo_name = repo_name
+        self.repo_path = f"{org_name}/{repo_name}"
+        self.headers = {
+            "Authorization": f"token {api_key}",
+            "Content-Type": "application/json",
+        }
+
 if __name__ == "__main__":
     try:
         config = load_config()
@@ -82,6 +94,12 @@ if __name__ == "__main__":
             ssl_verification = config["kibana"]["verify_ssl"],
         )
         kibana_connected = kibana_client.test_connection()
+
+        gitea_client = GiteaClient(
+            base_url = config["gitea"]["url"],
+            api_key = config["gitea"]["api_key"],
+            org_name = config["gitea"]["organization"],
+        )
 
     except Exception as error:
         logging.critical(f"Failed to execute script: {error}", exc_info=True)

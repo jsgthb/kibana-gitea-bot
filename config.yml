@@ -3,6 +3,12 @@ kibana:
   api_key: "kibana-api-key" # Requires all privileges for the Cases feature in the Management, Observability, or Security section 
   verify_ssl: True # Set to false if using self signed certs
 
+gitea:
+  url: "https://gitea.test"
+  api_key: "gitea-api-key" # API key needs read and write access to issues, and read access to orgs
+  organization: "gitea-org"
+  issue_repo: "gitea-repo"
+
 logging:
   level: "INFO"
   format: "%(asctime)s - %(levelname)s - %(message)s"
