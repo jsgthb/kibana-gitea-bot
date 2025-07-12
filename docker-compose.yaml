@@ -92,7 +92,7 @@ services:
       - xpack.ml.use_auto_machine_memory_percent=true
       # Enable API key for security cases
       - xpack.security.authc.api_key.enabled=true
-    mem_limit: 1g
+    mem_limit: 4g
     ulimits:
       memlock:
         soft: -1
@@ -125,7 +125,7 @@ services:
       - ELASTICSEARCH_PASSWORD=changeme
       - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=a_secure_encryption_key_of_at_least_32_characters
-    mem_limit: 1g
+    mem_limit: 2g
     healthcheck:
       test:
         [
