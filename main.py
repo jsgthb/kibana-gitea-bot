@@ -111,7 +111,7 @@ if __name__ == "__main__":
             level=config["logging"]["level"].upper(),
             format=config["logging"]["format"],
         )
-        logging.info("Config successfully loaded!")
+        logging.info(f"Config successfully loaded from {CONFIG_PATH}!")
 
         kibana_client = KibanaClient(
             base_url = config["kibana"]["url"],
