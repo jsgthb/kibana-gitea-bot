@@ -78,7 +78,32 @@ class GiteaClient:
             "Authorization": f"token {api_key}",
             "Content-Type": "application/json",
         }
-
+    
+    def test_connection(self) -> bool:
+        """Test Gitea connection by checking config repository"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/v1/repos/{self.repo_path}",
+                headers = self.headers
+            )
+            response.raise_for_status()
+            logging.info("Successfully connected to Gitea!")
+            return True
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code
+            if status == 401 or status == 403:
+                response_json = e.response.json()
+                message = response_json.get("message", "No message provided")
+                logging.error(f"Gitea authentication failed ({status}). Check API key and permissions for repo '{self.repo_path}' ({message})")
+            elif status == 404:
+                logging.error(f"Gitea repository '{self.repo_path}' not found (404)")
+            else:
+                logging.error(f"Gitea connection failed with HTTP error: {e}")
+            return False
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Gitea connection failure: {e}")
+            return False
+        
 if __name__ == "__main__":
     try:
         config = load_config()
@@ -99,7 +124,13 @@ if __name__ == "__main__":
             base_url = config["gitea"]["url"],
             api_key = config["gitea"]["api_key"],
             org_name = config["gitea"]["organization"],
+            repo_name = config["gitea"]["issue_repo"]
         )
+        gitea_connected = gitea_client.test_connection()
+
+        if not kibana_connected or not gitea_connected:
+            logging.critical("One or more API connection tests failed. Exiting")
+            exit(1)
 
     except Exception as error:
         logging.critical(f"Failed to execute script: {error}", exc_info=True)
