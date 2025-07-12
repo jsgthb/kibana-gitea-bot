@@ -2,7 +2,8 @@ import logging
 import yaml
 import urllib3
 import requests
-from typing import Dict, Any
+import time
+from typing import Dict, Any, List
 
 CONFIG_PATH = "config.yml"
 
@@ -66,7 +67,30 @@ class KibanaClient:
             # Other errors such as connection timeouts or DNS errors
             logging.error(f"Kibana connection failure: {error}")
             return False
-        
+    
+    def get_cases_by_tag(self, tag: str) -> List[Dict[str, Any]]:
+        """Retrieves all (up to 100) Kibana cases with the specificied tag"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/cases/_find",
+                headers = self.headers,
+                params = {
+                    "tags": [
+                        tag,
+                        tag.lower(),
+                        tag.title(),
+                        tag.upper()
+                    ],
+                    "perPage": 100
+                },
+                verify = self.ssl_verification
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("cases", [])
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Failed to get Kibana security cases by tag '{tag}': {error}")
+
 class GiteaClient:
     """Responsible for all interactions with the Gitea API"""
     def __init__(self, base_url: str, api_key: str, org_name: str, repo_name: str):
@@ -103,7 +127,20 @@ class GiteaClient:
         except requests.exceptions.RequestException as e:
             logging.error(f"Gitea connection failure: {e}")
             return False
-        
+
+def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config: Dict[str, Any]):
+    """Fetch cases from Kibana security, post them to Gitea, and update the original cases"""
+    search_tag = config["kibana"]["search_tag"] 
+    logging.info(f"Checking for Kibana Security cases with tag '{search_tag}'")        
+
+    cases_to_process = kibana_client.get_cases_by_tag(search_tag)
+
+    if not cases_to_process:
+        logging.info("No new cases to process")
+        return
+    
+    logging.info(f"Found {len(cases_to_process)} case(s) to process")
+
 if __name__ == "__main__":
     try:
         config = load_config()
@@ -131,6 +168,12 @@ if __name__ == "__main__":
         if not kibana_connected or not gitea_connected:
             logging.critical("One or more API connection tests failed. Exiting")
             exit(1)
+
+        search_interval = config["kibana"]["search_interval"]
+        logging.info(f"All connections successful! Starting monitoring loop with {search_interval} second interval")
+        while True:
+            process_cases(kibana_client, gitea_client, config)
+            time.sleep(search_interval)
 
     except Exception as error:
         logging.critical(f"Failed to execute script: {error}", exc_info=True)
