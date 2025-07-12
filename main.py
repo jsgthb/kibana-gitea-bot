@@ -127,6 +127,19 @@ class GiteaClient:
         except requests.exceptions.RequestException as e:
             logging.error(f"Gitea connection failure: {e}")
             return False
+        
+    def get_org_labels(self) -> List[Dict[str, Any]]:
+        """Retrieves all labels for the oragnization listed in the config"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/v1/orgs/{self.org_name}/labels",
+                headers = self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Failed to get Gitea org labels for '{self.org_name}': {error}")
+            return []
 
 def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config: Dict[str, Any]):
     """Fetch cases from Kibana security, post them to Gitea, and update the original cases"""
