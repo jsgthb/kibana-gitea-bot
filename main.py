@@ -90,6 +90,7 @@ class KibanaClient:
             return data.get("cases", [])
         except requests.exceptions.RequestException as error:
             logging.error(f"Failed to get Kibana security cases by tag '{tag}': {error}")
+            return []
     
     def update_case_tags_and_status(self, case: Dict[str, Any], search_tag: str, new_tag: str) -> Tuple[bool, Dict[str, Any]]:
         """Replaces the search tag with a success tag and sets the case status to in-progress"""
