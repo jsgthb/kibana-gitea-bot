@@ -3,7 +3,7 @@ import yaml
 import urllib3
 import requests
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 CONFIG_PATH = "config.yml"
 
@@ -140,6 +140,43 @@ class GiteaClient:
         except requests.exceptions.RequestException as error:
             logging.error(f"Failed to get Gitea org labels for '{self.org_name}': {error}")
             return []
+
+    def create_issue(self, case: Dict[str, Any], priority_labels: Dict[str, Any]) -> Tuple[bool, str]:
+        """Creates an issue in the Gitea repository from a Kibana security case with Kibana tags converted to (pre-existing) Gitea labels"""
+        issue_url = ""
+        try:
+            # Prepare labels
+            org_labels = self.get_org_labels()
+            if not org_labels:
+                logging.warning("No Gitea organisation labels found. Proceeding without labels")
+
+            label_map = {label["name"].lower(): label["id"] for label in org_labels}
+            kibana_tags = case.get("tags", [])
+            label_ids = {label_map[tag.lower()] for tag in kibana_tags if tag.lower() in label_map}
+
+            # Add priority labels
+            priority = case.get("severity", "low").lower()
+            priority_label_id = priority_labels.get(priority, priority_labels["low"])
+            label_ids.add(priority_label_id)
+
+            # Create issue
+            response = requests.post(
+                f"{self.base_url}/api/v1/repos/{self.repo_path}/issues",
+                headers = self.headers,
+                json = {
+                    "title": case.get("title"),
+                    "body": case.get("description"),
+                    "labels": list(label_ids)
+                }                
+            )
+            response.raise_for_status()
+            response_data = response.json()
+            issue_url = response_data.get("html_url", "")
+            logging.info(f"Successfully created Gitea issue for case '{case.get('title')}' ({issue_url})")
+            return True, issue_url
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Gitea issue creation failed for case '{case.get('title')}' : {error}")
+            return False, issue_url
 
 def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config: Dict[str, Any]):
     """Fetch cases from Kibana security, post them to Gitea, and update the original cases"""

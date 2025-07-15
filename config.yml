@@ -10,6 +10,12 @@ gitea:
   api_key: "gitea-api-key" # API key needs read and write access to issues, and read access to orgs
   organization: "gitea-org"
   issue_repo: "gitea-repo"
+  label-ids: # IDs of the Gitea labels corresponding to the Kibana case severity
+    severity:
+      low: 13
+      medium: 12
+      high: 11
+      critical: 10
 
 logging:
   level: "INFO"
