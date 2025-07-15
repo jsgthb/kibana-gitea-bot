@@ -90,6 +90,53 @@ class KibanaClient:
             return data.get("cases", [])
         except requests.exceptions.RequestException as error:
             logging.error(f"Failed to get Kibana security cases by tag '{tag}': {error}")
+    
+    def update_case_tags_and_status(self, case: Dict[str, Any], search_tag: str, new_tag: str) -> Tuple[bool, Dict[str, Any]]:
+        """Replaces the search tag with a success tag and sets the case status to in-progress"""
+        try:
+            original_tags = case.get("tags")
+            updated_tags = [tag for tag in original_tags if tag.lower() != search_tag.lower()]
+
+            # Add new tag if not already present
+            if not any(tag.lower() == new_tag.lower() for tag in updated_tags):
+                updated_tags.append(new_tag)
+
+            payload = {
+                "cases": [
+                    {
+                        "id": case.get("id"),
+                        "version": case.get("version"),
+                        "tags": updated_tags,
+                        "status": "in-progress"
+                    }
+                ]
+            }
+            response = requests.patch(
+                f"{self.base_url}/api/cases",
+                headers = self.headers,
+                json = payload,
+                verify = self.ssl_verification
+            )
+            response.raise_for_status()
+            updated_case_data = response.json()
+            return True, updated_case_data
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Kibana case update failure for case '{case.get('title')}' : {error}")
+            return False, {}
+    
+    def get_case_info(self, case_id: str) -> Dict[str, Any]:
+        """Retrieves details of a single Kibana security case"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/cases/{case_id}",
+                headers = self.headers,
+                verify = self.ssl_verification
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Failed to get info for case {case_id}: {error}")
+            return {}
 
 class GiteaClient:
     """Responsible for all interactions with the Gitea API"""
@@ -172,7 +219,7 @@ class GiteaClient:
             response.raise_for_status()
             response_data = response.json()
             issue_url = response_data.get("html_url", "")
-            logging.info(f"Successfully created Gitea issue for case '{case.get('title')}' ({issue_url})")
+            logging.debug(f"Successfully created Gitea issue for case '{case.get('title')}' ({issue_url})")
             return True, issue_url
         except requests.exceptions.RequestException as error:
             logging.error(f"Gitea issue creation failed for case '{case.get('title')}' : {error}")
@@ -180,8 +227,9 @@ class GiteaClient:
 
 def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config: Dict[str, Any]):
     """Fetch cases from Kibana security, post them to Gitea, and update the original cases"""
-    search_tag = config["kibana"]["search_tag"] 
-    logging.info(f"Checking for Kibana Security cases with tag '{search_tag}'")        
+    search_tag = config["kibana"]["search_tag"]
+    success_tag = config["kibana"]["success_tag"]  
+    logging.info(f"Checking for Kibana Security cases with tag '{search_tag}'...")        
 
     cases_to_process = kibana_client.get_cases_by_tag(search_tag)
 
@@ -190,6 +238,31 @@ def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config
         return
     
     logging.info(f"Found {len(cases_to_process)} case(s) to process")
+    for case in cases_to_process:
+        case_id = case.get("id")
+        case_title = case.get("title")
+
+        if success_tag in case.get("tags"):
+            logging.info(f"Skipping case '{case_title}' ({case_id}) as it has already been posted")
+        
+        # Create gitea issue
+        issue_created, issue_url = gitea_client.create_issue(case, config["gitea"]["label_ids"]["severity"])
+
+        if issue_created:
+            update_success, updated_case = kibana_client.update_case_tags_and_status(case, search_tag, success_tag)
+
+            if update_success:
+                logging.info(f"Successfully forwarded case '{case_title}' to Gitea ({issue_url})")
+            else:
+                # Retry case update if it fails due to version conflict
+                logging.warning(f"Failed to update case '{case_title}' after posting, attempting retry...")
+                fresh_case_data = kibana_client.get_cases_by_tag
+                if fresh_case_data:
+                    retry_success, _ = kibana_client.update_case_tags_and_status(fresh_case_data, search_tag, success_tag)
+                    if retry_success:
+                        logging.info(f"Successfully updated case '{case_title}' on retry")
+                    else:
+                        logging.error(f"Case update for '{case_title}' failed on retry")
 
 if __name__ == "__main__":
     try:

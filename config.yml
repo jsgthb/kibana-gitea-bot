@@ -4,13 +4,14 @@ kibana:
   verify_ssl: True # Set to false if using self signed certs
   search_tag: "search"
   search_interval: 60 # Interval in seconds
+  success_tag: "Gitea ✓"
 
 gitea:
   url: "https://gitea.test"
   api_key: "gitea-api-key" # API key needs read and write access to issues, and read access to orgs
   organization: "gitea-org"
   issue_repo: "gitea-repo"
-  label-ids: # IDs of the Gitea labels corresponding to the Kibana case severity
+  label_ids: # IDs of the Gitea labels corresponding to the Kibana case severity
     severity:
       low: 13
       medium: 12
