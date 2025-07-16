@@ -269,6 +269,8 @@ def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config
 
         if success_tag in case.get("tags"):
             logging.info(f"Skipping case '{case_title}' ({case_id}) as it has already been posted")
+            kibana_client.update_case_tags_and_status(case, search_tag, success_tag)
+            continue
         
         # Create gitea issue
         issue_created, issue_url = gitea_client.create_issue(case, config["gitea"]["label_ids"]["severity"], config["kibana"]["url"])
