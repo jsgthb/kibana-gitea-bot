@@ -209,7 +209,7 @@ class GiteaClient:
             logging.error(f"Failed to get Gitea org labels for '{self.org_name}': {error}")
             return []
 
-    def create_issue(self, case: Dict[str, Any], priority_labels: Dict[str, Any]) -> Tuple[bool, str]:
+    def create_issue(self, case: Dict[str, Any], priority_labels: Dict[str, Any], kibana_base_url: str) -> Tuple[bool, str]:
         """Creates an issue in the Gitea repository from a Kibana security case with Kibana tags converted to (pre-existing) Gitea labels"""
         issue_url = ""
         try:
@@ -228,12 +228,16 @@ class GiteaClient:
             label_ids.add(priority_label_id)
 
             # Create issue
+            original_description = case.get("description")
+            case_link = f"{kibana_base_url}/app/security/cases/{case.get('id')}"
+            creator = case.get("created_by", {}).get("full_name", "N/A")
+            description = f"{original_description}\n\n---\n*Kibana Case [{case.get('id')}]({case_link}) created by {creator}*"
             response = requests.post(
                 f"{self.base_url}/api/v1/repos/{self.repo_path}/issues",
                 headers = self.headers,
                 json = {
                     "title": case.get("title"),
-                    "body": case.get("description"),
+                    "body": description,
                     "labels": list(label_ids)
                 }                
             )
@@ -267,7 +271,7 @@ def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config
             logging.info(f"Skipping case '{case_title}' ({case_id}) as it has already been posted")
         
         # Create gitea issue
-        issue_created, issue_url = gitea_client.create_issue(case, config["gitea"]["label_ids"]["severity"])
+        issue_created, issue_url = gitea_client.create_issue(case, config["gitea"]["label_ids"]["severity"], config["kibana"]["url"])
 
         if issue_created:
             logging.info(f"Successfully posted '{case_title}' to Gitea")
