@@ -8,7 +8,7 @@ kibana:
 
 gitea:
   url: "https://gitea.test"
-  api_key: "gitea-api-key" # API key needs read and write access to issues, and read access to orgs
+  api_key: "gitea-api-key" # API key needs read and write access to issues, and read access to orgs and repositories
   organization: "gitea-org"
   issue_repo: "gitea-repo"
   label_ids: # IDs of the Gitea labels corresponding to the Kibana case severity
