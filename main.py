@@ -276,7 +276,7 @@ def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config
         if issue_created:
             logging.info(f"Successfully posted '{case_title}' to Gitea")
             update_success, _ = kibana_client.update_case_tags_and_status(case, search_tag, success_tag)
-            comment = f"Successfully forwarded to Gitea. Issue URL: {issue_url}"
+            comment = f"Successfully forwarded to Gitea. Issue URL: [{issue_url}]({issue_url})"
 
             if update_success:
                 kibana_client.add_comment_to_case(case_id, comment)
