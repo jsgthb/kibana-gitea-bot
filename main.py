@@ -138,6 +138,26 @@ class KibanaClient:
         except requests.exceptions.RequestException as error:
             logging.error(f"Failed to get info for case {case_id}: {error}")
             return {}
+    
+    def add_comment_to_case(self, case_id: str, comment: str) -> bool:
+        """Adds a comment to a Kibana Security case"""
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/cases/{case_id}/comments",
+                headers = self.headers,
+                json = {
+                    "type": "user",
+                    "owner": "securitySolution",
+                    "comment": comment
+                },
+                verify = self.ssl_verification
+            )
+            response.raise_for_status()
+            logging.debug(f"Comment successfully posted to Kibana Security case '{case_id}'")
+            return True
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Failed to post Kibana comment to case '{case_id}' : {error}")
+            return False
 
 class GiteaClient:
     """Responsible for all interactions with the Gitea API"""
@@ -250,10 +270,13 @@ def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config
         issue_created, issue_url = gitea_client.create_issue(case, config["gitea"]["label_ids"]["severity"])
 
         if issue_created:
-            update_success, updated_case = kibana_client.update_case_tags_and_status(case, search_tag, success_tag)
+            logging.info(f"Successfully posted '{case_title}' to Gitea")
+            update_success, _ = kibana_client.update_case_tags_and_status(case, search_tag, success_tag)
+            comment = f"Successfully forwarded to Gitea. Issue URL: {issue_url}"
 
             if update_success:
-                logging.info(f"Successfully forwarded case '{case_title}' to Gitea ({issue_url})")
+                kibana_client.add_comment_to_case(case_id, comment)
+                logging.debug(f"Successfully updated tags and commented on Kibana case '{case_title}'")
             else:
                 # Retry case update if it fails due to version conflict
                 logging.warning(f"Failed to update case '{case_title}' after posting, attempting retry...")
@@ -261,7 +284,8 @@ def process_cases(kibana_client: KibanaClient, gitea_client: GiteaClient, config
                 if fresh_case_data:
                     retry_success, _ = kibana_client.update_case_tags_and_status(fresh_case_data, search_tag, success_tag)
                     if retry_success:
-                        logging.info(f"Successfully updated case '{case_title}' on retry")
+                        logging.debug(f"Successfully updated case '{case_title}' on retry")
+                        kibana_client.add_comment_to_case(case_id, comment)
                     else:
                         logging.error(f"Case update for '{case_title}' failed on retry")
 
